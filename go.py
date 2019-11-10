@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
+
 def periodic(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly):
     if xtemp < 0:
-
         xtemp = xtemp + Lx
         xflux = xflux - px
 
@@ -23,10 +23,12 @@ def periodic(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly):
     return xtemp, ytemp, xflux, yflux
 
 
-def periodic_hole(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N):
-    if xtemp < 0:
+def periodic_hole(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N, mask):
+    if xtemp <= 0:
         if ytemp >= Ly / 3 and ytemp <= 2 * Ly / 3:
             local_N[i] = 0
+            mask[i] = False
+            xtemp = -100
         else:
             xtemp = xtemp + Lx
             xflux = xflux - px[i]
@@ -46,10 +48,12 @@ def periodic_hole(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N):
     return xtemp, ytemp, xflux, yflux
 
 
-def mixed_hole(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N):
+def mixed_hole(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N, mask):
     if xtemp <= 0:
         if ytemp >= Ly / 3 and ytemp <= 2 * Ly / 3:
             local_N[i] = 0
+            mask[i] = False
+            xtemp = -100
         else:
             px[i] = - px[i]
             xflux = xflux - px[i]
@@ -69,10 +73,12 @@ def mixed_hole(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N):
     return xtemp, ytemp, xflux, yflux
 
 
-def strong(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N):
+def strong(xtemp, ytemp, xflux, yflux, px, py, Lx, Ly, i, local_N, mask):
     if xtemp <= 0:
         if ytemp >= Ly / 3 and ytemp <= 2 * Ly / 3:
             local_N[i] = 0
+            mask[i] = False
+            xtemp = -100
         else:
             # xtemp = - xtemp
             px[i] = - px[i]
@@ -107,13 +113,10 @@ def separation(dx, dy, Lx, Ly):
 
 def separation_per_hole(dx, dy, Lx, Ly, x1, y1, x2, y2):
 
-    if (x1 <= 0 or x2 <= 0) and ((y2 >= Ly / 3 and y2 <= 2 * Ly / 3) or (y1 >= Ly / 3 and y1 <= 2 * Ly / 3)):
-        dx = dx
-    else:
-        if abs(dx) > (0.5 * Lx):
-            dx = dx * (1.0 - Lx / abs(dx))
-        if abs(dy) > (0.5 * Ly):
-            dy = dy * (1.0 - Ly / abs(dy))
+    # if abs(dx) > (0.5 * Lx):
+    #     dx = dx * (1.0 - Lx / abs(dx))
+    if abs(dy) > (0.5 * Ly):
+        dy = dy * (1.0 - Ly / abs(dy))
     return dx, dy
 
 
@@ -137,61 +140,65 @@ def f(r):
     return force, potential
 
 
-def accel(x, y, ax, ay, N, Lx, Ly, pe, list1, list2):
+def accel(x, y, ax, ay, N, Lx, Ly, pe, list1, list2, mask):
     for i in range(N):
         ax[i] = 0
         ay[i] = 0
     for i in range(N - 1):
-        for j in range(i + 1, N):
-            dx = x[i] - x[j]
-            dy = y[i] - y[j]
-            dx, dy = separation(dx, dy, Lx, Ly)
-            # Todo # dx, dy = separation_per_hole(dx, dy, Lx, Ly, x[i], y[i], x[j], y[j])
-            # dx, dy = sep(dx, dy, Lx, Ly)
-            r = np.sqrt(dx ** 2 + dy ** 2)
-            force, potential = f(r)
-            if force > 0:
-                # print("Расс \t, Сила \t, i \t, j \t")
-                # print(r, "\t", force, "\t", i, "\t", j, "\t")
-                if list1.__len__() == 0:
-                    list1.append(i)
-                    list2.append(j)
-                else:
-                    if j != list2[-1]:
-                        list1.append(i)
-                        list2.append(j)
-            ax[i] = ax[i] + force * dx
-            ay[i] = ay[i] + force * dy
+        if mask[i]:
+            for j in range(i + 1, N):
+                if mask[j]:
+                    dx = x[i] - x[j]
+                    dy = y[i] - y[j]
+                    # dx, dy = separation(dx, dy, Lx, Ly)
+                    # dx, dy = separation_per_hole(dx, dy, Lx, Ly, x[i], y[i], x[j], y[j])
+                    # dx, dy = sep(dx, dy, Lx, Ly)
+                    r = np.sqrt(dx ** 2 + dy ** 2)
+                    force, potential = f(r)
+                    if force > 0:
+                        # print("Расс \t, Сила \t, i \t, j \t")
+                        # print(r, "\t", force, "\t", i, "\t", j, "\t")
+                        if list1.__len__() == 0:
+                            list1.append(i)
+                            list2.append(j)
+                        else:
+                            if j != list2[-1]:
+                                list1.append(i)
+                                list2.append(j)
+                    ax[i] = ax[i] + force * dx
+                    ay[i] = ay[i] + force * dy
 
-            ax[j] = ax[j] - force * dx
-            ay[j] = ay[j] - force * dy
+                    ax[j] = ax[j] - force * dx
+                    ay[j] = ay[j] - force * dy
 
-            pe = pe + potential
+                    pe = pe + potential
     return pe
 
 
-def Verlet(x, y, vx, vy, ax, ay, N, Lx, Ly, dt, virial, xflux, yflux, pe, ke, list1, list2, local_N):
+def Verlet(x, y, vx, vy, ax, ay, N, Lx, Ly, dt, virial, xflux, yflux, pe, ke, list1, list2, local_N, mask):
     for i in range(N):
-        xnew = x[i] + vx[i] * dt + 0.5 * ax[i] * dt ** 2
-        ynew = y[i] + vy[i] * dt + 0.5 * ay[i] * dt ** 2
-        # Частично меняем скорость, используя старое ускорение
-        vx[i] = vx[i] + 0.5 * ax[i] * dt
-        vy[i] = vy[i] + 0.5 * ay[i] * dt
-        # Периодические краевые условия и вычисление потока
-        # xnew, ynew, xflux, yflux = periodic(xnew, ynew, xflux, yflux, vx[i], vy[i], Lx, Ly)
-        # Не забудь убрать сепарейшен
-        # xnew, ynew, xflux, yflux = strong(xnew, ynew, xflux, yflux, vx, vy, Lx, Ly, i, local_N)
-        xnew, ynew, xflux, yflux = periodic_hole(xnew, ynew, xflux, yflux, vx, vy, Lx, Ly, i, local_N)
-        # xnew, ynew, xflux, yflux = mixed_hole(xnew, ynew, xflux, yflux, vx, vy, Lx, Ly, i, local_N)
-        x[i] = xnew
-        y[i] = ynew
-    pe = accel(x, y, ax, ay, N, Lx, Ly, pe, list1, list2)
+        if mask[i]:
+            xnew = x[i] + vx[i] * dt + 0.5 * ax[i] * dt ** 2
+            ynew = y[i] + vy[i] * dt + 0.5 * ay[i] * dt ** 2
+            # Частично меняем скорость, используя старое ускорение
+            vx[i] = vx[i] + 0.5 * ax[i] * dt
+            vy[i] = vy[i] + 0.5 * ay[i] * dt
+            # Периодические краевые условия и вычисление потока
+            # xnew, ynew, xflux, yflux = periodic(xnew, ynew, xflux, yflux, vx[i], vy[i], Lx, Ly)
+            # Не забудь убрать сепарейшен
+            xnew, ynew, xflux, yflux = strong(xnew, ynew, xflux, yflux, vx, vy, Lx, Ly, i, local_N, mask)
+            # xnew, ynew, xflux, yflux = periodic_hole(xnew, ynew, xflux, yflux, vx, vy, Lx, Ly, i, local_N, mask)
+            # xnew, ynew, xflux, yflux = mixed_hole(xnew, ynew, xflux, yflux, vx, vy, Lx, Ly, i, local_N, mask)
+            x[i] = xnew
+            y[i] = ynew
+    pe = accel(x, y, ax, ay, N, Lx, Ly, pe, list1, list2, mask)
     for i in range(N):
         # Окончательно меняем скорость, используя новое ускорение
-        vx[i] = vx[i] + 0.5 * ax[i] * dt
-        vy[i] = vy[i] + 0.5 * ay[i] * dt
-        ke = ke + 0.5 * (vx[i] ** 2 + vy[i] ** 2)
-        virial = virial + x[i] * ax[i] + y[i] * ay[i]
+        if mask[i]:
+            vx[i] = vx[i] + 0.5 * ax[i] * dt
+            vy[i] = vy[i] + 0.5 * ay[i] * dt
+            ke = ke + 0.5 * (vx[i] ** 2 + vy[i] ** 2)
+            virial = virial + x[i] * ax[i] + y[i] * ay[i]
     return ke, virial, xflux, yflux, pe
 
 
@@ -227,6 +234,8 @@ if __name__ == "__main__":
     #Координаты
     x = np.zeros(N)
     y = np.zeros(N)
+    mask = np.zeros(N, dtype=np.bool)
+    mask[:] = True
 
     #Скорости
     vx = np.zeros(N)
@@ -312,7 +321,7 @@ if __name__ == "__main__":
     list2 = []
     list1.clear()
     list2.clear()
-    pe = accel(x, y, ax, ay, N, Lx, Ly, pe, list1, list2)
+    pe = accel(x, y, ax, ay, N, Lx, Ly, pe, list1, list2, mask)
     time = 0
     pe = 0
     ke = 0
@@ -339,7 +348,7 @@ if __name__ == "__main__":
     for iset in range(nset):
         #Число шагов по времени между усреднениями
         for iave in range(nave):
-            ke, verial, xflux, yflux, pe = Verlet(x, y, vx, vy, ax, ay, N, Lx, Ly, dt, virial, xflux, yflux, pe, ke, list1, list2, local_N)
+            ke, verial, xflux, yflux, pe = Verlet(x, y, vx, vy, ax, ay, N, Lx, Ly, dt, virial, xflux, yflux, pe, ke, list1, list2, local_N, mask)
             dct = {}
             dct.clear()
             local_triple = 0
@@ -390,13 +399,14 @@ if __name__ == "__main__":
 
     print(sect)
     print(triple)
+    print(mask.sum())
     log_A = (sum_t * sum_ln_y_t - sum_ln_y * sum_t2) / (sum_t ** 2 - t1.__len__() * sum_t2)
     B = (sum_ln_y - log_A * t1.__len__()) / (sum_t)
     f1.close()
 
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.set_xlim(-2, Lx + 2)
-    ax.set_ylim(-2, Ly + 2)
+    ax.set_xlim(0, Lx)
+    ax.set_ylim(0, Ly)
 
     scatter = ax.scatter(x_data[0], y_data[0], c=t, zorder=1, s=25)  # Scatter plot
     time_text = ax.text(0.05, 0.95, '', horizontalalignment='left', verticalalignment='top', transform=ax.transAxes)
@@ -405,6 +415,7 @@ if __name__ == "__main__":
     def animate(i):
         if i % 2 == 0:
             scatter.set_offsets(np.c_[x_data[i, :], y_data[i, :]])
+            # plt.vlines(0.1, ymin=Ly / 3, ymax=2 * Ly / 3)
         # xmin = x_data[i,:].min(); xmax = x_data[i,:].max()
         # ymin = y_data[i,:].min(); ymax = y_data[i,:].max()
         # ax.set_xlim(xmin - 0.1 * (xmax - xmin), xmax + 0.1 * (xmax - xmin))
